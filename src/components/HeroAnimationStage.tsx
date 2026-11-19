@@ -200,7 +200,7 @@ export const HeroAnimationStage: React.FC = () => {
       gsap.set(heroTextRef.current, { opacity: 1, y: 0, scale: 1, display: 'flex' });
       gsap.set(carWrapperRef.current, { opacity: 1, scale: initOpening.scale, y: initOpening.y, rotation: 0, display: 'flex' });
       gsap.set(carState1Ref.current, { opacity: 1 });
-      gsap.set(carState2Ref.current, { opacity: 0, '--xray-wipe': '-12%' } as gsap.TweenVars);
+      gsap.set(carState2Ref.current, { opacity: 0 });
       gsap.set(carState3Ref.current, { opacity: 0 });
       gsap.set(xrayGlowRef.current, { opacity: 0 });
       gsap.set(carShadowRef.current, { opacity: 1 });
@@ -216,46 +216,71 @@ export const HeroAnimationStage: React.FC = () => {
       const carWidth = carBoxEl?.offsetWidth || carHeight * (848 / 1264);
       const partBasePx = partElementsRef.current[0]?.offsetWidth || (isMobile ? 96 : 192);
 
+      // Mobile viewport safe stage metrics (accounting for FloatingNavbar & bottom WhatsApp clearance)
+      const mobileTopSafe = isLandscape ? 54 : 76;
+      const mobileBottomSafe = isLandscape ? 16 : 64;
+      const mobileUsableH = Math.max(260, height - mobileTopSafe - mobileBottomSafe);
+      const mobileCenterY = isMobile ? (mobileTopSafe - mobileBottomSafe) / 2 : 0;
+
+      const targetMobileCarH = isLandscape
+        ? Math.min(mobileUsableH * 0.56, 220)
+        : Math.min(mobileUsableH * 0.47, width * 0.78, 312);
+      const targetMobileCarW = targetMobileCarH * (848 / 1264);
+      const mobileCarScale = isMobile ? targetMobileCarH / carHeight : 1;
+
+      const mobilePartScale = isLandscape
+        ? 0.56
+        : Math.min(0.76, Math.max(0.56, (width - targetMobileCarW - 44) / (2 * partBasePx)));
+      const mobilePartVis = partBasePx * mobilePartScale;
+      const mobileMinSideX = targetMobileCarW * 0.46 + mobilePartVis * 0.46 + 8;
+      const mobileMaxSideX = width / 2 - mobilePartVis * 0.48 - 8;
+      const mobileSideX = Math.max(76, Math.min(mobileMaxSideX, Math.max(mobileMinSideX, (mobileMinSideX + mobileMaxSideX) / 2)));
+
+      const mobileGapY = Math.max(12, Math.min(20, (mobileUsableH - targetMobileCarH - 2 * mobilePartVis) * 0.28));
+      const mobileTopBottomDist = Math.min(
+        mobileUsableH / 2 - mobilePartVis * 0.52,
+        targetMobileCarH / 2 + mobilePartVis * 0.5 + mobileGapY
+      );
+
       // Mobile viewport boundary clamping so parts never get pushed off-screen on 320px–430px devices
       const clampX = (rawX: number, scale: number) => {
         if (!isMobile) return rawX;
-        const margin = width <= 360 ? 8 : 12;
+        const margin = width <= 360 ? 6 : 10;
         const maxOffset = Math.max(40, width / 2 - (partBasePx * scale) / 2 - margin);
         return Math.max(-maxOffset, Math.min(maxOffset, rawX));
       };
       const clampY = (rawY: number, scale: number) => {
         if (!isMobile) return rawY;
         const halfPart = (partBasePx * scale) / 2;
-        const topSafe = isLandscape ? 54 : 72;
-        const bottomSafe = isLandscape ? 16 : 28;
-        const minOffset = -(height / 2 - topSafe - halfPart);
-        const maxOffset = height / 2 - bottomSafe - halfPart;
+        const minOffset = -(height / 2 - mobileTopSafe - halfPart);
+        const maxOffset = height / 2 - mobileBottomSafe - halfPart;
         return Math.max(minOffset, Math.min(maxOffset, rawY));
       };
 
       // STEP 1: PHYSICAL CHASSIS ORIGINS (calibrated to 848x1264 cutaway engine/cabin/wheel wells)
+      const originCarH = isMobile ? targetMobileCarH : carHeight;
+      const originCarW = isMobile ? targetMobileCarW : carWidth;
       const physicalChassisOrigins = [
-        { x: 0,             y: -0.30 * carHeight, rot: 0 },   // 0. Motor (front engine bay)
-        { x: -0.27 * carWidth, y: -0.38 * carHeight, rot: 8 },   // 1. Farol (front-left headlight)
-        { x: 0,             y: -0.09 * carHeight, rot: 0 },   // 2. Câmbio (center transmission tunnel)
-        { x: -0.15 * carWidth, y: -0.26 * carHeight, rot: -8 },  // 3. Alternador (front accessory belt side)
-        { x: 0.10 * carWidth,  y: -0.19 * carHeight, rot: 0 },   // 4. Difusor de ar (dashboard center-right vent)
-        { x: 0.34 * carWidth,  y: 0.29 * carHeight,  rot: 12 },  // 5. Roda (rear-right wheel arch)
+        { x: 0,                  y: mobileCenterY - 0.30 * originCarH, rot: 0 },   // 0. Motor (engine compartment)
+        { x: -0.27 * originCarW, y: mobileCenterY - 0.38 * originCarH, rot: 8 },   // 1. Farol (front-left headlight)
+        { x: 0.02 * originCarW,  y: mobileCenterY - 0.08 * originCarH, rot: 0 },   // 2. Câmbio (transmission tunnel)
+        { x: -0.16 * originCarW, y: mobileCenterY - 0.25 * originCarH, rot: -8 },  // 3. Alternador (engine accessory bay)
+        { x: 0.12 * originCarW,  y: mobileCenterY - 0.18 * originCarH, rot: 0 },   // 4. Difusor de ar (dashboard area)
+        { x: 0.34 * originCarW,  y: mobileCenterY + 0.28 * originCarH, rot: 12 },  // 5. Roda (rear-right wheel arch)
       ];
 
-      // STEP 2: EXTRACTION TRAJECTORIES (mobile-clamped on < 768px, exact desktop offsets on >= 768px)
-      const mobileScaleExtract = width <= 360 ? 0.64 : isLandscape ? 0.60 : 0.70;
+      // STEP 2: EXTRACTION TRAJECTORIES (clean non-overlapping detachment on mobile, preserved on desktop)
       const extractionOffsets = isMobile
         ? [
-            { x: clampX(0, mobileScaleExtract),               y: clampY(-0.46 * carHeight, mobileScaleExtract), rot: -2,  scale: mobileScaleExtract },
-            { x: clampX(-width * 0.30, mobileScaleExtract),   y: clampY(-0.34 * carHeight, mobileScaleExtract), rot: -10, scale: mobileScaleExtract * 0.95 },
-            { x: clampX(width * 0.31, mobileScaleExtract),    y: clampY(0.04 * carHeight, mobileScaleExtract),  rot: 8,   scale: mobileScaleExtract * 0.98 },
-            { x: clampX(-width * 0.31, mobileScaleExtract),   y: clampY(0.04 * carHeight, mobileScaleExtract),  rot: -8,  scale: mobileScaleExtract * 0.95 },
-            { x: clampX(width * 0.30, mobileScaleExtract),    y: clampY(-0.22 * carHeight, mobileScaleExtract), rot: 6,   scale: mobileScaleExtract * 0.92 },
-            { x: clampX(width * 0.28, mobileScaleExtract),    y: clampY(0.36 * carHeight, mobileScaleExtract),  rot: 22,  scale: mobileScaleExtract },
+            { x: 0,                                         y: clampY(mobileCenterY - mobileTopBottomDist, mobilePartScale),             rot: -2,  scale: mobilePartScale },        // 0. Motor clears front hood
+            { x: clampX(-mobileSideX, mobilePartScale),     y: clampY(mobileCenterY + targetMobileCarH * 0.12, mobilePartScale), rot: -8,  scale: mobilePartScale * 0.96 }, // 1. Farol clears left flank cleanly before Alternador emerges
+            { x: clampX(mobileSideX, mobilePartScale),      y: clampY(mobileCenterY + targetMobileCarH * 0.05, mobilePartScale), rot: 8,   scale: mobilePartScale * 0.98 }, // 2. Câmbio clears right door
+            { x: clampX(-mobileSideX, mobilePartScale),     y: clampY(mobileCenterY - targetMobileCarH * 0.25, mobilePartScale), rot: -6,  scale: mobilePartScale * 0.96 }, // 3. Alternador emerges directly left from engine bay
+            { x: clampX(mobileSideX, mobilePartScale),      y: clampY(mobileCenterY - targetMobileCarH * 0.30, mobilePartScale), rot: 6,   scale: mobilePartScale * 0.94 }, // 4. Difusor clears upper-right fender
+            { x: clampX(mobileSideX, mobilePartScale),      y: clampY(mobileCenterY + targetMobileCarH * 0.35, mobilePartScale), rot: 18,  scale: mobilePartScale },        // 5. Roda clears rear-right wheel arch
           ]
         : [
-            { x: 0,             y: -0.52 * carHeight, rot: -2,  scale: 0.86 },
+            { x: 0,                y: -0.52 * carHeight, rot: -2,  scale: 0.86 },
             { x: -0.70 * carWidth, y: -0.40 * carHeight, rot: -10, scale: 0.82 },
             { x: 0.72 * carWidth,  y: 0.04 * carHeight,  rot: 8,   scale: 0.84 },
             { x: -0.72 * carWidth, y: 0.04 * carHeight,  rot: -8,  scale: 0.82 },
@@ -263,25 +288,18 @@ export const HeroAnimationStage: React.FC = () => {
             { x: 0.64 * carWidth,  y: 0.40 * carHeight,  rot: 22,  scale: 0.86 },
           ];
 
-      // STEP 3: SCENE 06 - EXACT DRIVE PARTS ORBIT POSITIONS AROUND CENTRAL VEHICLE
-      const mobileScaleOrbit = width <= 360 ? 0.62 : isLandscape ? 0.58 : 0.68;
-      const safeOrbitMaxX = Math.max(72, width / 2 - (partBasePx * mobileScaleOrbit) / 2 - (width <= 360 ? 8 : 12));
-      const orbitRadiusX = isMobile
-        ? Math.min(isLandscape ? width * 0.28 : width * 0.36, safeOrbitMaxX)
-        : Math.min(width * 0.34, 410);
-      const safeOrbitMaxY = Math.max(90, (height - (isLandscape ? 60 : 88)) / 2 - (partBasePx * mobileScaleOrbit) / 2);
-      const orbitRadiusY = isMobile
-        ? Math.min(isLandscape ? height * 0.34 : height * 0.31, safeOrbitMaxY)
-        : Math.min(height * 0.34, 320);
+      // STEP 3: SCENE 06 - BALANCED SURROUNDING FORMATION AROUND CENTRAL VEHICLE
+      const orbitRadiusX = Math.min(width * 0.34, 410);
+      const orbitRadiusY = Math.min(height * 0.34, 320);
 
       const scene06SurroundPositions = isMobile
         ? [
-            { x: 0,                                                     y: clampY(orbitRadiusY * 0.96, mobileScaleOrbit),  rot: 0,  scale: mobileScaleOrbit },
-            { x: clampX(-orbitRadiusX * 0.88, mobileScaleOrbit * 0.96), y: clampY(orbitRadiusY * 0.44, mobileScaleOrbit),  rot: 6,  scale: mobileScaleOrbit * 0.96 },
-            { x: clampX(orbitRadiusX * 0.92, mobileScaleOrbit),         y: clampY(orbitRadiusY * 0.08, mobileScaleOrbit),  rot: -4, scale: mobileScaleOrbit },
-            { x: clampX(-orbitRadiusX * 0.90, mobileScaleOrbit * 0.96), y: clampY(-orbitRadiusY * 0.14, mobileScaleOrbit), rot: 5,  scale: mobileScaleOrbit * 0.96 },
-            { x: clampX(orbitRadiusX * 0.88, mobileScaleOrbit * 0.94),  y: clampY(-orbitRadiusY * 0.44, mobileScaleOrbit), rot: -5, scale: mobileScaleOrbit * 0.94 },
-            { x: 0,                                                     y: clampY(-orbitRadiusY * 0.92, mobileScaleOrbit), rot: 0,  scale: mobileScaleOrbit * 1.02 },
+            { x: 0,                                      y: clampY(mobileCenterY + mobileTopBottomDist, mobilePartScale),             rot: 0,  scale: mobilePartScale },        // 0. Motor (below vehicle)
+            { x: clampX(-mobileSideX, mobilePartScale),  y: clampY(mobileCenterY + targetMobileCarH * 0.27, mobilePartScale), rot: 5,  scale: mobilePartScale * 0.96 }, // 1. Farol (lower-left)
+            { x: clampX(mobileSideX, mobilePartScale),   y: clampY(mobileCenterY + targetMobileCarH * 0.23, mobilePartScale), rot: -4, scale: mobilePartScale * 0.98 }, // 2. Câmbio (right side)
+            { x: clampX(-mobileSideX, mobilePartScale),  y: clampY(mobileCenterY - targetMobileCarH * 0.22, mobilePartScale), rot: 4,  scale: mobilePartScale * 0.96 }, // 3. Alternador (left side)
+            { x: clampX(mobileSideX, mobilePartScale),   y: clampY(mobileCenterY - targetMobileCarH * 0.29, mobilePartScale), rot: -5, scale: mobilePartScale * 0.94 }, // 4. Difusor de ar (upper-right)
+            { x: 0,                                      y: clampY(mobileCenterY - mobileTopBottomDist, mobilePartScale),             rot: 0,  scale: mobilePartScale * 1.02 }, // 5. Roda (above vehicle)
           ]
         : [
             { x: 0,                    y: orbitRadiusY * 0.94,  rot: 0,  scale: 0.84 }, // 0. Motor (below car)
@@ -299,20 +317,12 @@ export const HeroAnimationStage: React.FC = () => {
         gsap.set(el, {
           x: origin.x,
           y: origin.y,
-          scale: 0.14,
+          scale: isMobile ? 0.12 : 0.14,
           rotation: origin.rot,
           autoAlpha: 0,
           display: 'flex',
           zIndex: 35
         });
-      });
-
-      partImageRefs.current.forEach((imgEl) => {
-        if (imgEl) {
-          gsap.set(imgEl, {
-            filter: 'drop-shadow(0px 14px 24px rgba(0, 0, 0, 0.34))'
-          });
-        }
       });
 
       // =========================================================================
@@ -338,8 +348,8 @@ export const HeroAnimationStage: React.FC = () => {
           scale: () => getOpeningVehicleTransform().scale
         },
         {
-          y: 0,
-          scale: 1,
+          y: isMobile ? mobileCenterY : 0,
+          scale: isMobile ? mobileCarScale : 1,
           duration: 18,
           ease: 'power2.inOut'
         },
@@ -367,7 +377,7 @@ export const HeroAnimationStage: React.FC = () => {
 
       masterTl.to(
         xrayGlowRef.current,
-        { opacity: 0.55, duration: 10, ease: 'power1.inOut' },
+        { opacity: 0.5, duration: 10, ease: 'power1.inOut' },
         15
       );
 
@@ -382,14 +392,14 @@ export const HeroAnimationStage: React.FC = () => {
             x: extractionOffsets[0].x,
             y: extractionOffsets[0].y,
             rotation: extractionOffsets[0].rot,
-            duration: 13,
+            duration: 12,
             ease: 'power2.out'
           },
           23
         );
       }
 
-      // --- SCENE 04: HEADLIGHT EXTRACTION SECOND (30% -> 42%) ---
+      // --- SCENE 04: HEADLIGHT EXTRACTION SECOND (30% -> 41%) ---
       const farolEl = partElementsRef.current[1];
       if (farolEl) {
         masterTl.to(
@@ -400,14 +410,14 @@ export const HeroAnimationStage: React.FC = () => {
             x: extractionOffsets[1].x,
             y: extractionOffsets[1].y,
             rotation: extractionOffsets[1].rot,
-            duration: 13,
+            duration: 11,
             ease: 'power2.out'
           },
           30
         );
       }
 
-      // --- SCENE 05: FURTHER EXTRACTIONS + X-RAY TO DISASSEMBLED CROSSFADE (36% -> 52%) ---
+      // --- SCENE 05: REMAINING EXTRACTIONS + PURE GPU OPACITY X-RAY TO DISASSEMBLED CROSSFADE (36% -> 53%) ---
       [2, 3, 4, 5].forEach((i, stepIndex) => {
         const el = partElementsRef.current[i];
         if (!el) return;
@@ -420,151 +430,201 @@ export const HeroAnimationStage: React.FC = () => {
             x: target.x,
             y: target.y,
             rotation: target.rot,
-            duration: 13,
+            duration: 11,
             ease: 'power2.out'
           },
-          36 + stepIndex * 3.2
+          36 + stepIndex * 3.0
         );
       });
 
-      // State 2 (complete X-ray) reveals State 3 (disassembled chassis) smoothly from front bay to rear
-      masterTl.set(carState3Ref.current, { opacity: 1 }, 24);
+      // Pure opacity crossfade from X-ray (State 2) to Disassembled chassis (State 3) avoids Safari mask-line artifacts
       masterTl.to(
-        carState2Ref.current,
-        { '--xray-wipe': '36%', duration: 9, ease: 'power1.inOut' } as gsap.TweenVars,
-        26
+        carState3Ref.current,
+        { opacity: 1, duration: 18, ease: 'power1.inOut' },
+        28
       );
       masterTl.to(
         carState2Ref.current,
-        { '--xray-wipe': '72%', duration: 9, ease: 'power1.inOut' } as gsap.TweenVars,
-        35
-      );
-      masterTl.to(
-        carState2Ref.current,
-        { '--xray-wipe': '116%', duration: 8, ease: 'power1.inOut' } as gsap.TweenVars,
-        44
+        { opacity: 0, duration: 18, ease: 'power1.inOut' },
+        31
       );
 
-      // --- SCENE 06: SIX COMPONENTS ORBIT PERIMETER AROUND CENTRAL VEHICLE (52% -> 68%) ---
-      const rawOuterSweepX = isMobile ? orbitRadiusX * 1.02 : orbitRadiusX * 1.24;
-      const orbitPartFootprint = partBasePx * (isMobile ? mobileScaleOrbit : 0.86) * 1.22;
-      const maxViewportPartX = Math.max(72, width / 2 - orbitPartFootprint / 2 - 14);
+      // --- SCENE 06: SIX COMPONENTS ORBIT PERIMETER AROUND CENTRAL VEHICLE (52% -> 67%) ---
+      const rawOuterSweepX = isMobile ? mobileSideX * 1.12 : orbitRadiusX * 1.24;
+      const orbitPartFootprint = partBasePx * (isMobile ? mobilePartScale : 0.86) * 1.08;
+      const maxViewportPartX = Math.max(72, width / 2 - orbitPartFootprint / 2 - 6);
       const outerSweepX = Math.min(rawOuterSweepX, maxViewportPartX);
-      const innerHoldX = isMobile ? orbitRadiusX * 0.64 : orbitRadiusX * 0.68;
+      const innerHoldX = isMobile ? Math.max(targetMobileCarW * 0.42 + mobilePartVis * 0.38, mobileSideX * 0.72) : orbitRadiusX * 0.68;
+      const cornerTuckX = isMobile ? Math.max(targetMobileCarW * 0.31 + mobilePartVis * 0.44, mobileSideX * 0.64) : orbitRadiusX * 0.68;
 
-      const scene06ArcKeyframes: gsap.TweenVars[][] = [
-        // 0. Motor: top engine bay -> sweeps wide outside left lane -> settles BELOW car
-        [
-          { x: clampX(-orbitRadiusX * 0.78, scene06SurroundPositions[0].scale), y: clampY(-orbitRadiusY * 0.78, scene06SurroundPositions[0].scale), rotation: -6, scale: scene06SurroundPositions[0].scale, duration: 3.6, ease: 'sine.inOut' },
-          { x: -outerSweepX,                                                   y: clampY(-orbitRadiusY * 0.04, scene06SurroundPositions[0].scale), rotation: -9, scale: scene06SurroundPositions[0].scale, duration: 4.4, ease: 'sine.inOut' },
-          { x: clampX(-orbitRadiusX * 0.74, scene06SurroundPositions[0].scale), y: clampY(orbitRadiusY * 0.76, scene06SurroundPositions[0].scale),  rotation: -4, scale: scene06SurroundPositions[0].scale, duration: 3.8, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[0].x, y: scene06SurroundPositions[0].y, rotation: scene06SurroundPositions[0].rot, scale: scene06SurroundPositions[0].scale, duration: 3.2, ease: 'power1.out' },
-        ],
-        // 1. Farol: upper-left -> holds inner lane while Motor sweeps outside -> settles LOWER-LEFT
-        [
-          { x: clampX(-innerHoldX, scene06SurroundPositions[1].scale), y: clampY(orbitRadiusY * 0.12, scene06SurroundPositions[1].scale), rotation: 2, scale: scene06SurroundPositions[1].scale, duration: 8.2, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[1].x, y: scene06SurroundPositions[1].y, rotation: scene06SurroundPositions[1].rot, scale: scene06SurroundPositions[1].scale, duration: 6.8, ease: 'power1.out' },
-        ],
-        // 2. Câmbio: mid-right -> waits inner lane while Roda climbs outer lane -> settles RIGHT
-        [
-          { x: clampX(innerHoldX, scene06SurroundPositions[2].scale), y: clampY(orbitRadiusY * 0.06, scene06SurroundPositions[2].scale), rotation: -4, scale: scene06SurroundPositions[2].scale, duration: 8.0, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[2].x, y: scene06SurroundPositions[2].y, rotation: scene06SurroundPositions[2].rot, scale: scene06SurroundPositions[2].scale, duration: 6.5, ease: 'power1.out' },
-        ],
-        // 3. Alternador: mid-left -> waits inner lane while Motor sweeps outside -> settles LEFT
-        [
-          { x: clampX(-innerHoldX, scene06SurroundPositions[3].scale), y: clampY(-orbitRadiusY * 0.10, scene06SurroundPositions[3].scale), rotation: 5, scale: scene06SurroundPositions[3].scale, duration: 8.0, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[3].x, y: scene06SurroundPositions[3].y, rotation: scene06SurroundPositions[3].rot, scale: scene06SurroundPositions[3].scale, duration: 6.5, ease: 'power1.out' },
-        ],
-        // 4. Difusor de ar: upper-right -> waits inner lane while Roda climbs outer lane -> settles UPPER-RIGHT
-        [
-          { x: clampX(innerHoldX, scene06SurroundPositions[4].scale), y: clampY(-orbitRadiusY * 0.36, scene06SurroundPositions[4].scale), rotation: -5, scale: scene06SurroundPositions[4].scale, duration: 8.0, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[4].x, y: scene06SurroundPositions[4].y, rotation: scene06SurroundPositions[4].rot, scale: scene06SurroundPositions[4].scale, duration: 6.5, ease: 'power1.out' },
-        ],
-        // 5. Roda: rear-right -> sweeps wide up right outer lane -> settles ABOVE car
-        [
-          { x: outerSweepX,                                                   y: clampY(orbitRadiusY * 0.22, scene06SurroundPositions[5].scale),  rotation: 16, scale: scene06SurroundPositions[5].scale, duration: 3.8, ease: 'sine.inOut' },
-          { x: outerSweepX,                                                   y: clampY(-orbitRadiusY * 0.42, scene06SurroundPositions[5].scale), rotation: 10, scale: scene06SurroundPositions[5].scale, duration: 4.2, ease: 'sine.inOut' },
-          { x: clampX(orbitRadiusX * 0.68, scene06SurroundPositions[5].scale), y: clampY(-orbitRadiusY * 0.80, scene06SurroundPositions[5].scale), rotation: 4,  scale: scene06SurroundPositions[5].scale, duration: 3.8, ease: 'sine.inOut' },
-          { x: scene06SurroundPositions[5].x, y: scene06SurroundPositions[5].y, rotation: scene06SurroundPositions[5].rot, scale: scene06SurroundPositions[5].scale, duration: 3.2, ease: 'power1.out' },
-        ],
-      ];
+      const scene06ArcKeyframes: gsap.TweenVars[][] = isMobile
+        ? [
+            // 0. Motor: leaves top -> glides down outer-left after Alternador arcs above hood -> settles BELOW vehicle
+            [
+              { x: clampX(-mobileSideX * 0.90, scene06SurroundPositions[0].scale), y: clampY(mobileCenterY - mobileTopBottomDist * 0.68, scene06SurroundPositions[0].scale), rotation: -6, scale: scene06SurroundPositions[0].scale, duration: 3.4, ease: 'sine.inOut' },
+              { x: -outerSweepX,                                                   y: clampY(mobileCenterY - targetMobileCarH * 0.04, scene06SurroundPositions[0].scale), rotation: -8, scale: scene06SurroundPositions[0].scale, duration: 4.2, ease: 'sine.inOut' },
+              { x: clampX(-mobileSideX * 0.88, scene06SurroundPositions[0].scale), y: clampY(mobileCenterY + mobileTopBottomDist * 0.72, scene06SurroundPositions[0].scale), rotation: -4, scale: scene06SurroundPositions[0].scale, duration: 3.4, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[0].x, y: scene06SurroundPositions[0].y, rotation: scene06SurroundPositions[0].rot, scale: scene06SurroundPositions[0].scale, duration: 2.8, ease: 'power1.out' },
+            ],
+            // 1. Farol: tucks inward at lower-left trunk taper while Motor sweeps past outer-left
+            [
+              { x: clampX(-cornerTuckX, scene06SurroundPositions[1].scale), y: clampY(mobileCenterY + targetMobileCarH * 0.34, scene06SurroundPositions[1].scale), rotation: 2, scale: scene06SurroundPositions[1].scale, duration: 6.2, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[1].x, y: scene06SurroundPositions[1].y, rotation: scene06SurroundPositions[1].rot, scale: scene06SurroundPositions[1].scale, duration: 7.0, ease: 'power1.out' },
+            ],
+            // 2. Câmbio: tucks promptly to narrow lower-right trunk corner while Roda climbs outer-right, then settles to right-lower
+            [
+              { x: clampX(cornerTuckX, scene06SurroundPositions[2].scale), y: clampY(mobileCenterY + targetMobileCarH * 0.36, scene06SurroundPositions[2].scale), rotation: -2, scale: scene06SurroundPositions[2].scale, duration: 4.0, ease: 'sine.inOut' },
+              { x: clampX(cornerTuckX, scene06SurroundPositions[2].scale), y: clampY(mobileCenterY + targetMobileCarH * 0.34, scene06SurroundPositions[2].scale), rotation: -2, scale: scene06SurroundPositions[2].scale, duration: 2.8, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[2].x, y: scene06SurroundPositions[2].y, rotation: scene06SurroundPositions[2].rot, scale: scene06SurroundPositions[2].scale, duration: 6.4, ease: 'power1.out' },
+            ],
+            // 3. Alternador: arcs cleanly above hood edge into empty 12:00 top-center slot while Motor sweeps down left, then arcs back to 10:00
+            [
+              { x: clampX(-mobileSideX * 0.72, scene06SurroundPositions[3].scale), y: clampY(mobileCenterY - mobileTopBottomDist * 0.88, scene06SurroundPositions[3].scale), rotation: 3, scale: scene06SurroundPositions[3].scale, duration: 2.8, ease: 'sine.inOut' },
+              { x: 0,                                                              y: clampY(mobileCenterY - mobileTopBottomDist * 0.98, scene06SurroundPositions[3].scale), rotation: 2, scale: scene06SurroundPositions[3].scale, duration: 3.0, ease: 'sine.inOut' },
+              { x: clampX(-mobileSideX * 0.72, scene06SurroundPositions[3].scale), y: clampY(mobileCenterY - mobileTopBottomDist * 0.86, scene06SurroundPositions[3].scale), rotation: 3, scale: scene06SurroundPositions[3].scale, duration: 3.2, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[3].x, y: scene06SurroundPositions[3].y, rotation: scene06SurroundPositions[3].rot, scale: scene06SurroundPositions[3].scale, duration: 4.2, ease: 'power1.out' },
+            ],
+            // 4. Difusor de ar: tucks neatly at tapered upper-right hood corner while Roda passes mid-right outer lane
+            [
+              { x: clampX(cornerTuckX * 0.90, scene06SurroundPositions[4].scale), y: clampY(mobileCenterY - targetMobileCarH * 0.44, scene06SurroundPositions[4].scale), rotation: -4, scale: scene06SurroundPositions[4].scale, duration: 5.6, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[4].x, y: scene06SurroundPositions[4].y, rotation: scene06SurroundPositions[4].rot, scale: scene06SurroundPositions[4].scale, duration: 7.6, ease: 'power1.out' },
+            ],
+            // 5. Roda: sweeps smoothly up wide right outer lane -> settles ABOVE vehicle
+            [
+              { x: outerSweepX,                                                   y: clampY(mobileCenterY + targetMobileCarH * 0.04, scene06SurroundPositions[5].scale), rotation: 12, scale: scene06SurroundPositions[5].scale, duration: 3.0, ease: 'sine.inOut' },
+              { x: outerSweepX,                                                   y: clampY(mobileCenterY - mobileTopBottomDist * 0.48, scene06SurroundPositions[5].scale), rotation: 8, scale: scene06SurroundPositions[5].scale, duration: 3.6, ease: 'sine.inOut' },
+              { x: clampX(mobileSideX * 0.72, scene06SurroundPositions[5].scale), y: clampY(mobileCenterY - mobileTopBottomDist * 0.90, scene06SurroundPositions[5].scale), rotation: 4, scale: scene06SurroundPositions[5].scale, duration: 3.4, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[5].x, y: scene06SurroundPositions[5].y, rotation: scene06SurroundPositions[5].rot, scale: scene06SurroundPositions[5].scale, duration: 3.2, ease: 'power1.out' },
+            ],
+          ]
+        : [
+            // Desktop preserved orbit arcs
+            [
+              { x: -orbitRadiusX * 0.78, y: -orbitRadiusY * 0.78, rotation: -6, scale: scene06SurroundPositions[0].scale, duration: 3.6, ease: 'sine.inOut' },
+              { x: -outerSweepX,         y: -orbitRadiusY * 0.04, rotation: -9, scale: scene06SurroundPositions[0].scale, duration: 4.4, ease: 'sine.inOut' },
+              { x: -orbitRadiusX * 0.74, y: orbitRadiusY * 0.76,  rotation: -4, scale: scene06SurroundPositions[0].scale, duration: 3.8, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[0].x, y: scene06SurroundPositions[0].y, rotation: scene06SurroundPositions[0].rot, scale: scene06SurroundPositions[0].scale, duration: 3.2, ease: 'power1.out' },
+            ],
+            [
+              { x: -innerHoldX, y: orbitRadiusY * 0.12, rotation: 2, scale: scene06SurroundPositions[1].scale, duration: 8.2, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[1].x, y: scene06SurroundPositions[1].y, rotation: scene06SurroundPositions[1].rot, scale: scene06SurroundPositions[1].scale, duration: 6.8, ease: 'power1.out' },
+            ],
+            [
+              { x: innerHoldX, y: orbitRadiusY * 0.06, rotation: -4, scale: scene06SurroundPositions[2].scale, duration: 8.0, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[2].x, y: scene06SurroundPositions[2].y, rotation: scene06SurroundPositions[2].rot, scale: scene06SurroundPositions[2].scale, duration: 6.5, ease: 'power1.out' },
+            ],
+            [
+              { x: -innerHoldX, y: -orbitRadiusY * 0.10, rotation: 5, scale: scene06SurroundPositions[3].scale, duration: 8.0, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[3].x, y: scene06SurroundPositions[3].y, rotation: scene06SurroundPositions[3].rot, scale: scene06SurroundPositions[3].scale, duration: 6.5, ease: 'power1.out' },
+            ],
+            [
+              { x: innerHoldX, y: -orbitRadiusY * 0.36, rotation: -5, scale: scene06SurroundPositions[4].scale, duration: 8.0, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[4].x, y: scene06SurroundPositions[4].y, rotation: scene06SurroundPositions[4].rot, scale: scene06SurroundPositions[4].scale, duration: 6.5, ease: 'power1.out' },
+            ],
+            [
+              { x: outerSweepX,         y: orbitRadiusY * 0.22,  rotation: 16, scale: scene06SurroundPositions[5].scale, duration: 3.8, ease: 'sine.inOut' },
+              { x: outerSweepX,         y: -orbitRadiusY * 0.42, rotation: 10, scale: scene06SurroundPositions[5].scale, duration: 4.2, ease: 'sine.inOut' },
+              { x: orbitRadiusX * 0.68, y: -orbitRadiusY * 0.80, rotation: 4,  scale: scene06SurroundPositions[5].scale, duration: 3.8, ease: 'sine.inOut' },
+              { x: scene06SurroundPositions[5].x, y: scene06SurroundPositions[5].y, rotation: scene06SurroundPositions[5].rot, scale: scene06SurroundPositions[5].scale, duration: 3.2, ease: 'power1.out' },
+            ],
+          ];
 
       partElementsRef.current.forEach((el, i) => {
         if (!el) return;
         masterTl.to(
           el,
           { keyframes: scene06ArcKeyframes[i] },
-          52 + i * 0.35
+          52 + i * 0.25
         );
       });
 
-      masterTl.to(
-        carWrapperRef.current,
-        { scale: isMobile ? (isLandscape ? 0.56 : 0.64) : 0.78, duration: 15, ease: 'sine.inOut' },
-        53
-      );
+      if (!isMobile) {
+        masterTl.to(
+          carWrapperRef.current,
+          { scale: 0.78, duration: 15, ease: 'sine.inOut' },
+          53
+        );
+      }
 
-      // --- SCENE 07: VEHICLE FADES OUT CLEANLY (68% -> 78%) ---
+      // --- SCENE 07: VEHICLE FADES OUT CLEANLY (68% -> 77%) ---
       masterTl.to(
         [carState1Ref.current, carState2Ref.current, carState3Ref.current, xrayGlowRef.current, carShadowRef.current],
-        { opacity: 0, duration: 10, ease: 'power2.in' },
+        { opacity: 0, duration: 9, ease: 'power2.in' },
         68
       );
 
       masterTl.to(
         carWrapperRef.current,
-        { scale: isMobile ? 0.55 : 0.65, duration: 10, ease: 'power2.in' },
+        { scale: isMobile ? mobileCarScale * 0.90 : 0.65, duration: 9, ease: 'power2.in' },
         68
       );
 
       // --- SCENE 08: CLEAN PART-TO-CARD SETTLEMENT (77% -> 94%, HOLD -> 100%) ---
       masterTl.to(
         finalTitleRef.current,
-        { opacity: 1, y: 0, duration: 11, ease: 'power2.out' },
-        77
+        { opacity: 1, y: 0, duration: 10, ease: 'power2.out' },
+        76
       );
 
       masterTl.to(
         cardsGridRef.current,
-        { opacity: 1, duration: 10, pointerEvents: 'auto', ease: 'power2.out' },
-        78
+        { opacity: 1, duration: 9, pointerEvents: 'auto', ease: 'power2.out' },
+        77
       );
 
+      // On mobile, guide crossing parts through proportional separated lanes so they never overlap even at 320px
       partElementsRef.current.forEach((el, i) => {
         if (!el) return;
-        masterTl.to(
-          el,
-          {
-            x: () => getCardLandingTarget(i).x,
-            y: () => getCardLandingTarget(i).y,
-            rotation: 0,
-            scale: () => getCardLandingTarget(i).scale,
-            duration: 12,
-            ease: 'power3.inOut'
-          },
-          78 + i * 0.35
-        );
-      });
-
-      partImageRefs.current.forEach((imgEl, i) => {
-        if (!imgEl) return;
-        masterTl.to(
-          imgEl,
-          {
-            filter: 'drop-shadow(0px 0px 0px rgba(0, 0, 0, 0))',
-            duration: 8,
-            ease: 'power1.out'
-          },
-          82 + i * 0.35
-        );
+        if (isMobile) {
+          const midLanePoints: Record<number, { x: number; y: number }> = {
+            0: { x: -mobileSideX * 0.78, y: mobileCenterY },                                 // Motor arcs up left lane
+            1: { x: width * 0.10,        y: mobileCenterY - targetMobileCarH * 0.36 },        // Farol sweeps across upper arc
+            2: { x: width * 0.14,        y: mobileCenterY + targetMobileCarH * 0.14 },        // Câmbio crosses lower-middle right-biased
+            3: { x: -width * 0.14,       y: mobileCenterY - targetMobileCarH * 0.08 },        // Alternador crosses upper-middle left-biased
+            4: { x: -width * 0.10,       y: mobileCenterY + targetMobileCarH * 0.38 },        // Difusor sweeps across lower arc
+            5: { x: mobileSideX * 0.78,  y: mobileCenterY },                                 // Roda arcs down right lane
+          };
+          const wp = midLanePoints[i];
+          const mobileLandStarts = [77, 78.8, 79.4, 79.4, 78.8, 77];
+          masterTl.to(
+            el,
+            {
+              keyframes: [
+                { x: wp.x, y: wp.y, rotation: 0, duration: 5.5, ease: 'sine.inOut' },
+                {
+                  x: () => getCardLandingTarget(i).x,
+                  y: () => getCardLandingTarget(i).y,
+                  rotation: 0,
+                  scale: () => getCardLandingTarget(i).scale,
+                  duration: 6.5,
+                  ease: 'power2.out'
+                }
+              ]
+            },
+            mobileLandStarts[i]
+          );
+        } else {
+          masterTl.to(
+            el,
+            {
+              x: () => getCardLandingTarget(i).x,
+              y: () => getCardLandingTarget(i).y,
+              rotation: 0,
+              scale: () => getCardLandingTarget(i).scale,
+              duration: 12,
+              ease: 'power3.inOut'
+            },
+            78 + i * 0.35
+          );
+        }
       });
 
       cardImageRefs.current.forEach((imgEl) => {
         if (!imgEl) return;
         masterTl.to(
           imgEl,
-          { opacity: 1, duration: 1.5, ease: 'none' },
-          90.2
+          { opacity: 1, duration: 1.2, ease: 'none' },
+          91.2
         );
       });
 
@@ -572,13 +632,13 @@ export const HeroAnimationStage: React.FC = () => {
         if (!el) return;
         masterTl.to(
           el,
-          { autoAlpha: 0, duration: 1.8, ease: 'power1.out' },
-          91.7
+          { autoAlpha: 0, duration: 1.4, ease: 'power1.out' },
+          92.2
         );
       });
 
       // Ensure final resting state from 94..100 holds completely steady
-      masterTl.to({}, { duration: 6.5 }, 93.5);
+      masterTl.to({}, { duration: 6.4 }, 93.6);
     };
 
     mm.add('(prefers-reduced-motion: no-preference) and (min-width: 768px) and (min-height: 520px)', () => {
@@ -602,8 +662,8 @@ export const HeroAnimationStage: React.FC = () => {
       ref={containerRef}
       className={
         prefersReducedMotion
-          ? 'relative w-full bg-[#F99B00] min-h-screen min-h-[100dvh]'
-          : 'relative w-full bg-[#F99B00] min-h-[410dvh] md:min-h-[440vh]'
+          ? 'relative w-full bg-[#F99B00] min-h-screen min-h-[100svh]'
+          : 'relative w-full bg-[#F99B00] min-h-[360svh] md:min-h-[440vh]'
       }
       id="scroll-animation-stage"
     >
@@ -613,7 +673,7 @@ export const HeroAnimationStage: React.FC = () => {
         className={
           prefersReducedMotion
             ? 'absolute top-0 left-0 h-px w-px pointer-events-none'
-            : 'absolute bottom-[100dvh] left-0 h-px w-px pointer-events-none'
+            : 'absolute bottom-[100svh] md:bottom-[100dvh] left-0 h-px w-px pointer-events-none'
         }
       />
       {/* Pinned Fullscreen Master Stage */}
@@ -621,15 +681,16 @@ export const HeroAnimationStage: React.FC = () => {
         ref={viewportRef}
         className={
           prefersReducedMotion
-            ? 'min-h-screen min-h-[100dvh] w-full flex flex-col justify-center pt-[max(4.75rem,calc(env(safe-area-inset-top)+3.75rem))] pb-20 sm:pb-12 px-3 sm:px-8 lg:px-12 select-none relative'
-            : 'h-screen h-[100dvh] w-full overflow-hidden flex flex-col justify-between pt-[max(4.25rem,calc(env(safe-area-inset-top)+3.5rem))] sm:pt-20 pb-5 sm:pb-8 px-3 sm:px-8 lg:px-12 select-none relative'
+            ? 'min-h-screen min-h-[100svh] w-full flex flex-col justify-center pt-[max(4.75rem,calc(env(safe-area-inset-top)+3.75rem))] pb-20 sm:pb-12 px-3 sm:px-8 lg:px-12 select-none relative'
+            : 'h-[100svh] md:h-[100dvh] w-full overflow-hidden flex flex-col justify-between pt-[max(4.25rem,calc(env(safe-area-inset-top)+3.5rem))] sm:pt-20 pb-5 sm:pb-8 px-3 sm:px-8 lg:px-12 select-none relative'
         }
       >
-        {/* Ambient Radial Lighting for Depth */}
+        {/* Ambient Radial Lighting for Depth (pure radial gradient without blend-mode layer boundaries) */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-35 mix-blend-overlay"
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.45) 0%, rgba(249,155,0,0) 70%)'
+            background: 'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.16) 0%, rgba(249,155,0,0) 70%)'
           }}
         />
 
@@ -693,20 +754,30 @@ export const HeroAnimationStage: React.FC = () => {
           ref={carWrapperRef}
           className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
         >
-          <div className="relative h-[46dvh] min-[390px]:h-[50dvh] sm:h-[58dvh] md:h-[60dvh] lg:h-[62dvh] max-h-[420px] sm:max-h-[580px] [@media(max-height:500px)_and_(orientation:landscape)]:h-[52dvh] aspect-[848/1264] flex items-center justify-center">
-            {/* Soft vertical ground shadow */}
+          <div className="relative h-[46svh] min-[390px]:h-[50svh] sm:h-[58dvh] md:h-[60dvh] lg:h-[62dvh] max-h-[420px] sm:max-h-[580px] [@media(max-height:500px)_and_(orientation:landscape)]:h-[52svh] aspect-[848/1264] flex items-center justify-center">
+            {/* Silhouette-proportioned natural ground shadow (pure radial gradient without blur/box artifacts) */}
             <div
               ref={carShadowRef}
-              className="absolute w-[76%] h-[92%] bg-black/40 blur-3xl rounded-full transform"
+              aria-hidden="true"
+              className="absolute w-[74%] h-[88%] pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(ellipse 48% 48% at 50% 50%, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.14) 48%, rgba(0, 0, 0, 0) 72%)'
+              }}
             />
 
-            {/* X-Ray Internal Technical Glow */}
+            {/* X-Ray Internal Technical Glow (pure radial gradient without blur artifacts) */}
             <div
               ref={xrayGlowRef}
-              className="absolute w-[68%] h-[84%] bg-cyan-400/20 blur-2xl rounded-full pointer-events-none"
+              aria-hidden="true"
+              className="absolute w-[70%] h-[84%] pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(ellipse 48% 48% at 50% 50%, rgba(34, 211, 238, 0.22) 0%, rgba(34, 211, 238, 0) 70%)'
+              }}
             />
 
-            {/* State 3: Disassembled Black Chassis (revealed cleanly as parts leave) */}
+            {/* State 3: Disassembled Black Chassis (revealed cleanly via GPU opacity crossfade) */}
             <img
               ref={carState3Ref}
               src={HERO_COPY.carBlackDisassembled}
@@ -714,10 +785,10 @@ export const HeroAnimationStage: React.FC = () => {
               referrerPolicy="no-referrer"
               decoding="async"
               fetchPriority="low"
-              className="absolute inset-0 w-full h-full object-contain filter drop-shadow-xl z-10"
+              className="absolute inset-0 w-full h-full object-contain z-10"
             />
 
-            {/* State 2: Registered Technical X-Ray Chassis (progressive nose-to-tail cutaway wipe) */}
+            {/* State 2: Registered Technical X-Ray Chassis */}
             <img
               ref={carState2Ref}
               src={HERO_COPY.carBlackXray}
@@ -725,13 +796,7 @@ export const HeroAnimationStage: React.FC = () => {
               referrerPolicy="no-referrer"
               decoding="async"
               fetchPriority="low"
-              style={{
-                maskImage:
-                  'linear-gradient(to bottom, transparent calc(var(--xray-wipe, -12%) - 8%), #000 calc(var(--xray-wipe, -12%) + 8%))',
-                WebkitMaskImage:
-                  'linear-gradient(to bottom, transparent calc(var(--xray-wipe, -12%) - 8%), #000 calc(var(--xray-wipe, -12%) + 8%))'
-              }}
-              className="absolute inset-0 w-full h-full object-contain filter drop-shadow-xl z-[15]"
+              className="absolute inset-0 w-full h-full object-contain z-[15]"
             />
 
             {/* State 1: Complete Intact Obsidian Black Vehicle (Scene 01 opening) */}
@@ -743,7 +808,7 @@ export const HeroAnimationStage: React.FC = () => {
               loading="eager"
               fetchPriority="high"
               decoding="sync"
-              className="absolute inset-0 w-full h-full object-contain filter drop-shadow-[0_24px_38px_rgba(0,0,0,0.45)] z-20"
+              className="absolute inset-0 w-full h-full object-contain z-20"
             />
           </div>
         </div>

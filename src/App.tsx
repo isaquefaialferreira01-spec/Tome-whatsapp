@@ -4,6 +4,7 @@ import { HeroAnimationStage } from './components/HeroAnimationStage';
 import { BrandsSection } from './components/BrandsSection';
 import { AuthoritySection } from './components/AuthoritySection';
 import { CustomerAssistanceSection } from './components/CustomerAssistanceSection';
+import { FaqSection } from './components/FaqSection';
 import { Footer } from './components/Footer';
 import { WhatsappFloat } from './components/ui/whatsapp-float';
 
@@ -19,6 +20,7 @@ export default function App() {
         <BrandsSection />
         <AuthoritySection />
         <CustomerAssistanceSection />
+        <FaqSection />
       </main>
 
       {/* Clean compact website footer */}
