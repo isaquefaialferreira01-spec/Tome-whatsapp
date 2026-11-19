@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #F99B00;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: #F99B00;
+    color: #000000;
+    overflow-x: clip;
+  }
+}
+
+.font-display {
+  font-family: 'Anton', 'Impact', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.font-hero-display {
+  font-family: 'Oswald', 'Anton', 'Impact', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
+/* Hide visible scrollbars while preserving normal scrolling */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes enter-fade-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in.fade-in.slide-in-from-bottom-2 {
+  animation: enter-fade-slide-up 0.3s ease-out both;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "NOVA VISEU AUTOPEÇAS",
+  "description": "A peça certa para o seu carro. Peças automotivas originais e catalogadas com procedência garantida.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
